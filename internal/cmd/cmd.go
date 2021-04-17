@@ -190,14 +190,17 @@ func initCmd(cpath string) {
 		log.Fatal(err)
 	}
 
+	log.Debug("Reading config...")
 	if conf, err = serv.ReadInConfig(path.Join(cp, GetConfigName())); err != nil {
 		log.Fatal(err)
 	}
 
+	log.Debug("Initializing service...")
 	if s, err = serv.NewService(conf); err != nil {
 		log.Fatal(err)
 	}
 
+	log.Debug("Initializing DB...")
 	if db, err = s.NewDB(); err != nil {
 		log.Fatalf("Failed to connect to database: %s", err)
 	}

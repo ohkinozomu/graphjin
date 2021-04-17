@@ -2,8 +2,12 @@ package sdata
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"log"
 	"strings"
+	"syscall"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -43,6 +47,34 @@ type st struct {
 	schema, table string
 }
 
+func scan(row *sql.Row, dbVersion *int, dbSchema, dbName *string) error {
+	if err := row.Scan(&dbVersion, &dbSchema, &dbName); err != nil {
+		return err
+	}
+	return nil
+}
+
+func retryScan(row *sql.Row, dbVersion *int, dbSchema, dbName *string) error {
+	if err := scan(row, dbVersion, dbSchema, dbName); err != nil {
+		log.Println("scanning error: " + err.Error())
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			for {
+				log.Println("Retry scanning")
+				time.Sleep(time.Second * 5)
+				if err = scan(row, dbVersion, dbSchema, dbName); err != nil {
+					log.Println("scanning error: " + err.Error())
+					continue
+				} else {
+					break
+				}
+			}
+		} else {
+			return err
+		}
+	}
+	return nil
+}
+
 func GetDBInfo(
 	db *sql.DB,
 	dbType string,
@@ -55,6 +87,7 @@ func GetDBInfo(
 
 	g := errgroup.Group{}
 
+	log.Println("Getting DB Info...")
 	g.Go(func() error {
 		var row *sql.Row
 		switch dbType {
@@ -64,24 +97,30 @@ func GetDBInfo(
 			row = db.QueryRow(postgresInfo)
 		}
 
-		if err := row.Scan(&dbVersion, &dbSchema, &dbName); err != nil {
-			return err
-		}
+		log.Println("sleeping before scanning...")
+		// hack
+		time.Sleep(time.Second * 30)
+
+		retryScan(row, &dbVersion, &dbSchema, &dbName)
 		return nil
 	})
 
 	g.Go(func() error {
 		var err error
+
+		log.Println("Discovering Columns...")
 		if cols, err = DiscoverColumns(db, dbType, blockList); err != nil {
 			return err
 		}
 
+		log.Println("Discovering Functions...")
 		if funcs, err = DiscoverFunctions(db, blockList); err != nil {
 			return err
 		}
 		return nil
 	})
 
+	log.Println("Waiting...")
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
@@ -219,6 +258,10 @@ func DiscoverColumns(db *sql.DB, dbtype string, blockList []string) ([]DBColumn,
 		sqlStmt = postgresColumnsStmt
 	}
 
+	log.Println("sleeping before running query...")
+	// hack
+	time.Sleep(time.Second * 30)
+
 	rows, err := db.Query(sqlStmt)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching columns: %s", err)
@@ -294,6 +337,10 @@ type DBFuncParam struct {
 }
 
 func DiscoverFunctions(db *sql.DB, blockList []string) ([]DBFunction, error) {
+	log.Println("sleeping before running query...")
+	// hack
+	time.Sleep(time.Second * 30)
+
 	rows, err := db.Query(functionsStmt)
 	if err != nil {
 		return nil, fmt.Errorf("Error fetching functions: %s", err)
@@ -308,9 +355,19 @@ func DiscoverFunctions(db *sql.DB, blockList []string) ([]DBFunction, error) {
 		var fn, fid string
 		fp := DBFuncParam{}
 
+		log.Println("Scanning rows...")
 		err = rows.Scan(&fn, &fid, &fp.Type, &fp.Name, &fp.ID)
 		if err != nil {
-			return nil, err
+			log.Println("debug: " + err.Error())
+			if errors.Is(err, syscall.ECONNREFUSED) {
+				log.Println("Retry scanning")
+				err = rows.Scan(&fn, &fid, &fp.Type, &fp.Name, &fp.ID)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, err
+			}
 		}
 
 		if !fp.Name.Valid {

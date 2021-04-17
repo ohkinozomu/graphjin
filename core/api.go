@@ -120,40 +120,49 @@ func newGraphJin(conf *Config, db *sql.DB, dbinfo *sdata.DBInfo) (*GraphJin, err
 		prod:   conf.Production || os.Getenv("GO_ENV") == "production",
 	}
 
+	gj.log.Println("Initializing APQCache...")
 	if err := gj.initAPQCache(); err != nil {
 		return nil, err
 	}
 
 	//order matters, do not re-order the initializers
 
+	gj.log.Println("Initializing Config...")
 	if err := gj.initConfig(); err != nil {
 		return nil, err
 	}
 
+	gj.log.Println("Initializing Discover...")
 	if err := gj.initDiscover(); err != nil {
 		return nil, err
 	}
 
+	gj.log.Println("Initializing initResolvers...")
 	if err := gj.initResolvers(); err != nil {
 		return nil, err
 	}
 
+	gj.log.Println("Initializing Schema...")
 	if err := gj.initSchema(); err != nil {
 		return nil, err
 	}
 
+	gj.log.Println("Initializing AllowList...")
 	if err := gj.initAllowList(); err != nil {
 		return nil, err
 	}
 
+	gj.log.Println("Initializing Compilers...")
 	if err := gj.initCompilers(); err != nil {
 		return nil, err
 	}
 
+	gj.log.Println("Initializing GraphQLEgine...")
 	if err := gj.initGraphQLEgine(); err != nil {
 		return nil, err
 	}
 
+	gj.log.Println("Initializing RoleStmt...")
 	if err := gj.prepareRoleStmt(); err != nil {
 		return nil, err
 	}
