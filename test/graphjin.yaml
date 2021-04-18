@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: graphql-service
+  labels:
+    run: graphjin
+spec:
+  ports:
+    - port: 8080
+      protocol: TCP
+  selector:
+    run: graphjin
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphjin
+spec:
+  selector:
+    matchLabels:
+      run: graphjin
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        run: graphjin
+    spec:
+      containers:
+        - name: graphjin
+          image: graphjin:dev
+          # For using local image
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GO_ENV
+              value: dev
+          volumeMounts:
+            - name: config
+              mountPath: /config/dev.yaml
+              subPath: dev.yaml
+              readOnly: true
+      volumes:
+        - name: config
+          secret:
+            secretName: graphjin-config
+            items:
+            - key: dev.yaml
+              path: dev.yaml
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: graphjin-config
+stringData:
+  dev.yaml: |
+    database:
+      type: postgres
+      host: my-release-postgresql
+      port: 5432
+      dbname: postgres
+      user: postgres
+      password: ${POSTGRES_PASSWORD}

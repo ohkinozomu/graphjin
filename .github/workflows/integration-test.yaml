@@ -1,0 +1,42 @@
+name: Integration test
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+jobs:
+  k8s-test:
+    name: Kubernetes integration test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      
+      - name: Create cluster
+        run: |
+          kind create cluster
+      
+      - name: Install PostgreSQL
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm install my-release bitnami/postgresql
+          kubectl get svc
+          kubectl get pods
+          export POSTGRES_PASSWORD=$(kubectl get secret --namespace default my-release-postgresql -o jsonpath="{.data.postgresql-password}" | base64 --decode)
+          cat core/postgres.sql | kubectl run my-release-postgresql-client --rm -i --restart='Never' --namespace default --image docker.io/bitnami/postgresql:11.11.0-debian-10-r62 --env="PGPASSWORD=$POSTGRES_PASSWORD" --command -- psql --host my-release-postgresql -U postgres -d postgres -p 5432 -
+
+      - name: Build graphjin
+        run: |
+          docker build -t graphjin:dev .
+
+      - name: Deploy graphjin
+        run: |
+          kind load docker-image graphjin:dev
+          export POSTGRES_PASSWORD=$(kubectl get secret --namespace default my-release-postgresql -o jsonpath="{.data.postgresql-password}" | base64 --decode)
+          sed -i -e "s/\${POSTGRES_PASSWORD}/$POSTGRES_PASSWORD/" test/graphjin.yaml
+          kubectl apply -f test/graphjin.yaml
+          sleep 10
+          export POD=`kubectl get pods -o=name | grep graphjin | sed -n 1p`
+          kubectl logs $POD
