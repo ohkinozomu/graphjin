@@ -32,7 +32,8 @@ var (
 	//go:embed web/build
 	webBuild embed.FS
 
-	apiRoute string = "/api/v1/graphql"
+	healthRoute string = "/health"
+	apiRoute    string = "/api/v1/graphql"
 )
 
 func initWatcher(s *Service) {
@@ -136,6 +137,10 @@ func routeHandler(s *Service, mux *http.ServeMux) (http.Handler, error) {
 		return mux, nil
 	}
 
+	if s.conf.HealthPath != "" {
+		healthRoute = s.conf.HealthPath
+	}
+
 	if s.conf.APIPath != "" {
 		apiRoute = path.Join("/", s.conf.APIPath, "/v1/graphql")
 	}
@@ -149,8 +154,8 @@ func routeHandler(s *Service, mux *http.ServeMux) (http.Handler, error) {
 	}
 
 	routes := map[string]http.Handler{
-		"/health": http.HandlerFunc(health(s)),
-		apiRoute:  apiHandler,
+		healthRoute: http.HandlerFunc(health(s)),
+		apiRoute:    apiHandler,
 	}
 
 	if err := setActionRoutes(s, routes); err != nil {

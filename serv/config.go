@@ -84,6 +84,9 @@ type Serv struct {
 	// DebugCORS enables debug logs for cors
 	DebugCORS bool `mapstructure:"cors_debug"`
 
+	// HealthPath change the health check path. Defaults to /health
+	HealthPath string `mapstructure:"health_path"`
+
 	// APIPath change the suffix of the api path. Defaults to /v1/graphql
 	APIPath string `mapstructure:"api_path"`
 
